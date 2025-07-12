@@ -1,0 +1,1496 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Robotics Cheatsheet</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- MathJax Configuration for LaTeX rendering -->
+    <script>
+        MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']]
+            },
+            svg: {
+                fontCache: 'global'
+            }
+        };
+    </script>
+    <script type="text/javascript" id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Warm Neutrals -->
+    <!-- Application Structure Plan: A single-page dashboard with a sticky top navigation bar for quick access to thematic sections (Core Concepts, Hardware, Control, Kinematics, Navigation, Perception, ROS, Learning & HRI). This non-linear structure is chosen over the PDF's linear flow to facilitate rapid, topic-focused review and comparison, which is ideal for exam preparation, especially for case-study questions. Key interactions include a live PID tuner, an FK/IK arm simulator, and a pathfinding algorithm visualizer. This design prioritizes making abstract concepts tangible and easy to compare, enhancing understanding and retention. -->
+    <!-- Visualization & Content Choices: 
+        - PID Controller: Report Info -> PID Gains; Goal -> Understand trade-offs; Viz -> Interactive Line Chart (Chart.js) with sliders; Interaction -> User adjusts gains (Kp, Ki, Kd) to see real-time effect on system response; Justification -> The best way to grasp the PID trilemma is by direct manipulation and observation; Library -> Chart.js.
+        - Kinematics: Report Info -> FK/IK concepts; Goal -> Compare and visualize; Viz -> 2-Link Arm on HTML Canvas; Interaction -> FK mode (sliders for joint angles determine end-effector position), IK mode (clicking a target position calculates joint angles); Justification -> Makes the abstract math of 'angles to position' vs. 'position to angles' concrete and intuitive; Method -> HTML Canvas API.
+        - Path Planning: Report Info -> A* vs. RRT algorithms; Goal -> Compare search strategies; Viz -> Animated Grid on HTML Canvas; Interaction -> Buttons trigger visualizations of A* (systematic search) and RRT (random exploration); Justification -> Visually contrasts the fundamental behavior of search-based vs. sampling-based planners; Method -> HTML Canvas API.
+        - Sensor/Control Comparisons: Report Info -> Pros/Cons of different sensors, Open vs. Closed loop; Goal -> Compare; Viz -> Toggled content panes and filterable cards; Interaction -> User clicks to switch views or filter categories; Justification -> Allows for focused, side-by-side comparison of key characteristics, aiding memorization and application; Method -> HTML/CSS/JS.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #FDFDFB;
+            color: #1a202c;
+        }
+        .nav-link {
+            transition: color 0.3s, border-color 0.3s;
+            border-bottom: 2px solid transparent;
+        }
+        .nav-link.active, .nav-link:hover {
+            color: #2563eb;
+            border-bottom-color: #2563eb;
+        }
+        .content-card {
+            background-color: #FFFFFF;
+            border: 1px solid #E2E8F0;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .content-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 40vh;
+        }
+        .control-button {
+            transition: background-color 0.3s, color 0.3s;
+        }
+        .control-button.active {
+            background-color: #2563eb;
+            color: white;
+        }
+        .path-grid-cell {
+            width: 10px;
+            height: 10px;
+            border: 1px solid #e2e8f0;
+        }
+        .path-grid-cell.obstacle { background-color: #4a5568; }
+        .path-grid-cell.start { background-color: #48bb78; }
+        .path-grid-cell.goal { background-color: #f56565; }
+        .path-grid-cell.path { background-color: #4299e1; }
+        .path-grid-cell.visited { background-color: #a0aec0; }
+        .path-grid-cell.rrt-node { background-color: #63b3ed; }
+        .path-grid-cell.rrt-path { background-color: #3182ce; }
+        .math-formula {
+            font-family: 'Times New Roman', serif; /* For better math rendering */
+            font-style: italic;
+            font-size: 1.1em;
+            display: block;
+            margin-top: 10px;
+            margin-bottom: 10px;
+            text-align: center;
+            background-color: #f0f4f8;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #d1d9e6;
+            overflow-x: auto; /* For long formulas */
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <header class="bg-white/80 backdrop-blur-lg sticky top-0 z-50 border-b border-gray-200">
+        <nav class="container mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <h1 class="text-lg sm:text-lg md:text-lg font-bold text-gray-800">Interactive Robotics Cheatsheet</h1>
+                <div class="hidden md:flex items-center space-x-8">
+                    <a href="#concepts" class="nav-link font-medium text-gray-600 pb-1">Concepts</a>
+                    <a href="#hardware" class="nav-link font-medium text-gray-600 pb-1">Hardware</a>
+                    <a href="#control" class="nav-link font-medium text-gray-600 pb-1">Control</a>
+                    <a href="#kinematics" class="nav-link font-medium text-gray-600 pb-1">Kinematics</a>
+                    <a href="#navigation" class="nav-link font-medium text-gray-600 pb-1">Navigation</a>
+                    <a href="#perception" class="nav-link font-medium text-gray-600 pb-1">Perception</a>
+                    <a href="#ros" class="nav-link font-medium text-gray-600 pb-1">ROS</a>
+                    <a href="#learning-hri" class="nav-link font-medium text-gray-600 pb-1">Learning & HRI</a>
+                </div>
+                 <div class="md:hidden">
+                    <select id="mobile-nav" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50">
+                        <option value="#concepts">Concepts</option>
+                        <option value="#hardware">Hardware</option>
+                        <option value="#control">Control</option>
+                        <option value="#kinematics">Kinematics</option>
+                        <option value="#navigation">Navigation</option>
+                        <option value="#perception">Perception</option>
+                        <option value="#ros">ROS</option>
+                        <option value="#learning-hri">Learning & HRI</option>
+                    </select>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <main class="container mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+        
+        <!-- Core Concepts Section -->
+        <section id="concepts" class="mb-16 pt-16 -mt-16">
+            <h2 class="text-3xl font-bold mb-2 text-gray-900">1. Core Concepts</h2>
+            <p class="text-lg text-gray-600 mb-8 max-w-4xl">This section introduces the fundamental definition of a robot and its core characteristics. Understanding these foundational ideas is the first step to analyzing any robotic system, from a simple automated arm to a complex autonomous vehicle.</p>
+            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div class="content-card rounded-lg p-6 col-span-1 md:col-span-2 lg:col-span-3">
+                    <h3 class="text-xl font-semibold mb-2">What is a Robot?</h3>
+                    <p>A robot is a programmable machine designed to perform a series of actions automatically or semi-autonomously. It interacts with the physical world through a continuous cycle of <span class="font-semibold text-blue-600">Sensing</span>, <span class="font-semibold text-green-600">Thinking</span> (Computation), and <span class="font-semibold text-red-600">Acting</span>.</p>
+                </div>
+                <!-- Characteristics Cards -->
+                <div id="robot-characteristics" class="col-span-1 md:col-span-2 lg:col-span-3 grid md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+            </div>
+
+            <div class="mt-12">
+                <h3 class="text-2xl font-semibold mb-4">Types of Robots</h3>
+                <p class="text-lg text-gray-600 mb-6">Robots come in many forms, depending on their application and environment. Each type is optimized for specific tasks.</p>
+                <div id="robot-types-cards" class="grid md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+            </div>
+        </section>
+        <hr class="mb-16 border-gray-200">
+
+        <!-- Hardware Section -->
+        <section id="hardware" class="mb-16 pt-16 -mt-16">
+            <h2 class="text-3xl font-bold mb-2 text-gray-900">2. Hardware: Sensors & Actuators</h2>
+            <p class="text-lg text-gray-600 mb-8 max-w-4xl">A robot's hardware defines its ability to perceive and interact with the world. This section covers the "senses" (sensors) and "muscles" (actuators) of a robot. Selecting the right hardware is a critical design trade-off based on the task and environment.</p>
+            
+            <div class="mb-12">
+                <h3 class="text-2xl font-semibold mb-4">Sensors: The Robot's Senses</h3>
+                <div class="flex flex-wrap gap-2 mb-4" id="sensor-filters"></div>
+                <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6" id="sensor-cards"></div>
+            </div>
+
+            <div>
+                <h3 class="text-2xl font-semibold mb-4">Actuators: The Robot's Muscles</h3>
+                <p class="text-sm text-gray-600 mb-4">Actuators are the components that convert control signals into physical motion, allowing a robot to move, lift, rotate, grasp, or otherwise interact with its surroundings. The choice of actuator depends on the required precision, power, speed, and environmental conditions of the task.</p>
+                
+                <h4 class="text-lg font-semibold mt-6 mb-2">Electric Actuators</h4>
+                <p class="text-sm text-gray-700 mb-4">Electric actuators are the most common type in robotics due to their precision, cleanliness, and ease of control. They convert electrical energy into mechanical motion.</p>
+                
+                <div class="grid md:grid-cols-3 gap-6 mb-8">
+                    <div class="content-card rounded-lg p-6">
+                        <h5 class="text-md font-semibold mb-2">DC Motors</h5>
+                        <p class="text-sm text-gray-600 mb-2">
+                            <strong>Working Principle:</strong> DC (Direct Current) motors convert electrical energy into mechanical energy through the interaction of magnetic fields. When current flows through a coil (armature) placed in a magnetic field, it experiences a force that causes it to rotate continuously.
+                        </p>
+                        <p class="text-sm text-gray-600 mb-2">
+                            <strong>Control:</strong> Speed and direction are typically controlled by varying the input voltage or using Pulse Width Modulation (PWM).
+                        </p>
+                        <ul class="list-disc list-inside ml-4 text-xs text-gray-600">
+                            <li><strong>Pros:</strong> Simple to control, high speed, continuous rotation, relatively inexpensive.</li>
+                            <li><strong>Cons:</strong> Less precise position control without external feedback (e.g., encoders), can be noisy, brushes wear out in brushed DC motors.</li>
+                            <li><strong>Applications:</strong> Driving wheels in mobile robots, fans, pumps, continuous rotation applications where precise angular positioning is not critical.</li>
+                        </ul>
+                    </div>
+                    <div class="content-card rounded-lg p-6">
+                        <h5 class="text-md font-semibold mb-2">Servo Motors</h5>
+                        <p class="text-sm text-gray-600 mb-2">
+                            <strong>Working Principle:</strong> A servo motor is a closed-loop system consisting of a DC motor, a gear reduction unit, a position sensor (potentiometer or encoder), and a control circuit. It receives a control signal (PWM) and rotates to a specific angular position, maintaining that position even under varying loads.
+                        </p>
+                        <p class="text-sm text-gray-600 mb-2">
+                            <strong>Control:</strong> Controlled by the width of a PWM pulse, which dictates the desired angle. The internal feedback loop continuously adjusts the motor to reach and hold the commanded position.
+                        </p>
+                        <ul class="list-disc list-inside ml-4 text-xs text-gray-600">
+                            <li><strong>Pros:</strong> Precise angular position control, high torque at low speeds, compact.</li>
+                            <li><strong>Cons:</strong> Limited range of rotation (typically 0-180° or 0-360° for continuous rotation servos), can "hunt" for position, more complex than simple DC motors.</li>
+                            <li><strong>Applications:</strong> Robotic arms (joint actuators), pan-tilt camera systems, grippers, steering mechanisms.</li>
+                        </ul>
+                    </div>
+                    <div class="content-card rounded-lg p-6">
+                        <h5 class="text-md font-semibold mb-2">Stepper Motors</h5>
+                        <p class="text-sm text-gray-600 mb-2">
+                            <strong>Working Principle:</strong> Stepper motors divide a full rotation into a number of equal steps. They move one step at a time by energizing specific coil windings in a sequence. This allows for very precise open-loop position control.
+                        </p>
+                        <p class="text-sm text-gray-600 mb-2">
+                            <strong>Control:</strong> Controlled by sending a sequence of electrical pulses to the motor coils. Each pulse causes the motor to rotate by one step.
+                        </p>
+                        <ul class="list-disc list-inside ml-4 text-xs text-gray-600">
+                            <li><strong>Pros:</strong> Excellent open-loop position accuracy (no feedback needed for basic operation), high holding torque when stationary, robust.</li>
+                            <li><strong>Cons:</strong> Can lose steps under heavy loads or high speeds, lower torque at high speeds, consumes power even when stationary, can be noisy.</li>
+                            <li><strong>Applications:</strong> 3D printers, CNC machines, plotters, precision positioning systems, camera sliders.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <h4 class="text-lg font-semibold mb-2">Comparison of Electric Actuators</h4>
+                <div class="overflow-x-auto mb-4">
+                    <table class="w-full text-sm text-gray-700 border-collapse">
+                        <thead>
+                            <tr class="bg-gray-100">
+                                <th class="px-2 py-1 border text-left">Aspect</th>
+                                <th class="px-2 py-1 border text-left">DC Motor</th>
+                                <th class="px-2 py-1 border text-left">Servo Motor</th>
+                                <th class="px-2 py-1 border text-left">Stepper Motor</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="px-2 py-1 border">Primary Use</td>
+                                <td class="px-2 py-1 border">Continuous rotation, speed control</td>
+                                <td class="px-2 py-1 border">Precise angular positioning</td>
+                                <td class="px-2 py-1 border">Precise step-by-step positioning</td>
+                            </tr>
+                            <tr>
+                                <td class="px-2 py-1 border">Control Type</td>
+                                <td class="px-2 py-1 border">Open-loop (speed), Closed-loop (position with encoder)</td>
+                                <td class="px-2 py-1 border">Closed-loop (internal feedback)</td>
+                                <td class="px-2 py-1 border">Open-loop (position)</td>
+                            </tr>
+                            <tr>
+                                <td class="px-2 py-1 border">Precision</td>
+                                <td class="px-2 py-1 border">Low (without feedback)</td>
+                                <td class="px-2 py-1 border">High</td>
+                                <td class="px-2 py-1 border">High (for steps)</td>
+                            </tr>
+                            <tr>
+                                <td class="px-2 py-1 border">Speed</td>
+                                <td class="px-2 py-1 border">High</td>
+                                <td class="px-2 py-1 border">Moderate</td>
+                                <td class="px-2 py-1 border">Low to Moderate</td>
+                            </tr>
+                            <tr>
+                                <td class="px-2 py-1 border">Torque</td>
+                                <td class="px-2 py-1 border">Variable (depends on load)</td>
+                                <td class="px-2 py-1 border">High at low speeds</td>
+                                <td class="px-2 py-1 border">High holding torque, drops at speed</td>
+                            </tr>
+                            <tr>
+                                <td class="px-2 py-1 border">Cost</td>
+                                <td class="px-2 py-1 border">Low</td>
+                                <td class="px-2 py-1 border">Moderate</td>
+                                <td class="px-2 py-1 border">Moderate</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="mt-6">
+                    <h4 class="text-lg font-semibold mb-2">Other Actuator Types</h4>
+                    <ul class="list-disc list-inside space-y-2 text-gray-700 text-sm">
+                        <li><strong>Hydraulic Actuators:</strong> Use incompressible fluid (oil) under pressure to generate high forces and torques. They offer high power density and are suitable for heavy-duty applications like excavators and large industrial robots. However, they can be messy, require pumps and reservoirs, and offer less precise control compared to electric motors.</li>
+                        <li><strong>Pneumatic Actuators:</strong> Use compressed air to generate linear or rotary motion. They are known for being fast, simple, and clean, often used for on/off actions like opening/closing grippers or simple pressing tasks. Their drawbacks include less precise control, the need for compressors and air reservoirs, and potential noise.</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+        <hr class="mb-16 border-gray-200">
+        
+        <!-- Control Section -->
+        <section id="control" class="mb-16 pt-16 -mt-16">
+            <h2 class="text-3xl font-bold mb-2 text-gray-900">3. Control Systems</h2>
+            <p class="text-lg text-gray-600 mb-8 max-w-4xl">Control systems are the brainstem of a robot, translating high-level goals into low-level actions. This section explores how robots regulate their behavior, comparing simple systems with more advanced, adaptive ones, and dives into the most common controller in robotics: the PID.</p>
+            
+            <div class="grid lg:grid-cols-2 gap-8">
+                <!-- Open vs Closed Loop -->
+                <div class="content-card rounded-lg p-6">
+                    <h3 class="text-xl font-semibold mb-4">Open-Loop vs. Closed-Loop Control</h3>
+                    <div class="flex justify-center mb-4 rounded-lg bg-gray-100 p-1">
+                        <button id="btn-open-loop" class="control-button w-1/2 p-2 rounded-md font-medium">Open-Loop</button>
+                        <button id="btn-closed-loop" class="control-button w-1/2 p-2 rounded-md font-medium">Closed-Loop</button>
+                    </div>
+                    <div id="control-loop-content"></div>
+                    <div class="mt-6">
+                        <h4 class="text-lg font-semibold mb-2">Theoretical Overview</h4>
+                        <p class="text-sm text-gray-700 mb-2">
+                            A <strong>Control System</strong> is a mechanism that manages or regulates the behavior of other devices to achieve a desired output.
+                        </p>
+                        <p class="text-sm text-gray-700 mb-2">
+                            <strong>Open-Loop Control Systems</strong> operate without feedback. Actions are based purely on preset commands, meaning they cannot correct errors or adapt to disturbances. They are simple and cost-effective but less accurate.
+                        </p>
+                        <p class="text-sm text-gray-700 mb-2">
+                            <strong>Closed-Loop Control Systems</strong> (feedback systems) continuously monitor the output via sensors and compare it to the desired setpoint. The difference (error) is used to adjust control actions, making them accurate, robust, and adaptive to dynamic environments, though more complex and costly. <strong>Negative feedback</strong> is predominantly used to reduce error and stabilize the system.
+                        </p>
+                        <h5 class="font-semibold text-md mt-4 mb-2">Comparison Summary</h5>
+                        <table class="w-full text-sm text-gray-700 border-collapse">
+                            <thead>
+                                <tr class="bg-gray-100">
+                                    <th class="px-2 py-1 border text-left">Aspect</th>
+                                    <th class="px-2 py-1 border text-left">Open-Loop</th>
+                                    <th class="px-2 py-1 border text-left">Closed-Loop</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="px-2 py-1 border">Feedback</td>
+                                    <td class="px-2 py-1 border">No</td>
+                                    <td class="px-2 py-1 border">Yes</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-2 py-1 border">Accuracy</td>
+                                    <td class="px-2 py-1 border">Less</td>
+                                    <td class="px-2 py-1 border">More</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-2 py-1 border">Adaptability</td>
+                                    <td class="px-2 py-1 border">Low</td>
+                                    <td class="px-2 py-1 border">High</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-2 py-1 border">Complexity</td>
+                                    <td class="px-2 py-1 border">Simple</td>
+                                    <td class="px-2 py-1 border">Complex</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- PID Controller -->
+                <div class="content-card rounded-lg p-6">
+                    <h3 class="text-xl font-semibold mb-2">Interactive PID Controller Tuning</h3>
+                    <p class="text-sm text-gray-600 mb-4">Adjust the gains to see their effect on system response. Try to reach the setpoint quickly with minimal overshoot and oscillation.</p>
+                    <div class="chart-container mb-4">
+                        <canvas id="pidChart"></canvas>
+                    </div>
+                    <div class="space-y-3">
+                        <!-- Kp Slider -->
+                        <div>
+                            <label for="kp-slider" class="flex justify-between text-sm font-medium text-gray-700"><span>Proportional (Kp): <span id="kp-value"></span></span> <span class="text-gray-500">Reduces rise time</span></label>
+                            <input id="kp-slider" type="range" min="0" max="1" step="0.01" value="0.5" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                        </div>
+                        <!-- Ki Slider -->
+                        <div>
+                            <label for="ki-slider" class="flex justify-between text-sm font-medium text-gray-700"><span>Integral (Ki): <span id="ki-value"></span></span> <span class="text-gray-500">Eliminates steady-state error</span></label>
+                            <input id="ki-slider" type="range" min="0" max="1" step="0.01" value="0.2" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                        </div>
+                        <!-- Kd Slider -->
+                        <div>
+                            <label for="kd-slider" class="flex justify-between text-sm font-medium text-gray-700"><span>Derivative (Kd): <span id="kd-value"></span></span> <span class="text-gray-500">Reduces overshoot</span></label>
+                            <input id="kd-slider" type="range" min="0" max="1" step="0.01" value="0.1" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                        </div>
+                    </div>
+                    <div class="mt-6">
+                        <h4 class="text-lg font-semibold mb-2">PID Control Equation</h4>
+                        <p class="text-sm text-gray-700">The total PID output $u(t)$ is a sum of the proportional, integral, and derivative terms:</p>
+                        <div class="math-formula">
+                            $u(t) = K_p \cdot e(t) + K_i \cdot \int e(\tau)d\tau + K_d \cdot \frac{de(t)}{dt}$
+                        </div>
+                        <p class="text-sm text-gray-700">Where $e(t)$ is the error, $K_p$ is proportional gain, $K_i$ is integral gain, and $K_d$ is derivative gain.</p>
+
+                        <h4 class="text-lg font-semibold mt-6 mb-2">Understanding PID Components</h4>
+                        <p class="text-sm text-gray-700 mb-2">
+                            The <strong>Proportional (P) Term</strong> ($K_p \cdot e(t)$) provides an immediate response to the current error. Increasing $K_p$ makes the system respond faster but can increase overshoot and degrade stability. It typically leaves a small steady-state error.
+                        </p>
+                        <p class="text-sm text-gray-700 mb-2">
+                            The <strong>Integral (I) Term</strong> ($K_i \cdot \int e(\tau)d\tau$) addresses accumulated past errors. Its primary role is to eliminate steady-state error. Increasing $K_i$ helps remove offsets but can increase overshoot and settling time, potentially leading to instability.
+                        </p>
+                        <p class="text-sm text-gray-700 mb-2">
+                            The <strong>Derivative (D) Term</strong> ($K_d \cdot \frac{de(t)}{dt}$) anticipates future error trends by reacting to the rate of change of error. Increasing $K_d$ reduces overshoot and improves settling time, thereby enhancing stability. However, it is sensitive to measurement noise.
+                        </p>
+
+                        <h4 class="text-lg font-semibold mt-6 mb-2">PID Tuning Methods</h4>
+                        <p class="text-sm text-gray-700 mb-2">
+                            <strong>Manual Tuning (Trial-and-Error):</strong> Start with $K_i=0, K_d=0$. Increase $K_p$ until oscillations begin. Then, add $K_i$ to eliminate steady-state error, and finally adjust $K_d$ to reduce overshoot and improve settling.
+                        </p>
+                        <p class="text-sm text-gray-700 mb-2">
+                            <strong>Ziegler-Nichols Method:</strong> An empirical method where $K_p$ is increased until constant oscillations occur. The ultimate gain ($K_u$) and ultimate period ($T_u$) are then used with a predefined table to calculate optimal PID gains.
+                        </p>
+                        <div class="overflow-x-auto mb-4">
+                            <table class="w-full text-sm text-gray-700 border-collapse">
+                                <thead>
+                                    <tr class="bg-gray-100">
+                                        <th class="px-2 py-1 border text-left">Controller Type</th>
+                                        <th class="px-2 py-1 border text-left">Kp</th>
+                                        <th class="px-2 py-1 border text-left">Ki</th>
+                                        <th class="px-2 py-1 border text-left">Kd</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td class="px-2 py-1 border">P</td>
+                                        <td class="px-2 py-1 border">$0.5K_u$</td>
+                                        <td class="px-2 py-1 border">–</td>
+                                        <td class="px-2 py-1 border">–</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-2 py-1 border">PI</td>
+                                        <td class="px-2 py-1 border">$0.45K_u$</td>
+                                        <td class="px-2 py-1 border">$1.2K_p/T_u$</td>
+                                        <td class="px-2 py-1 border">–</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-2 py-1 border">PID</td>
+                                        <td class="px-2 py-1 border">$0.6K_u$</td>
+                                        <td class="px-2 py-1 border">$2K_p/T_u$</td>
+                                        <td class="px-2 py-1 border">$K_pT_u/8$</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <p class="text-sm text-gray-700">
+                            <strong>Cohen-Coon Method:</strong> Suitable for first-order plus time-delay (FOPTD) systems, using an open-loop step response to estimate process gain, time constant, and dead time, from which PID parameters are derived.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <hr class="mb-16 border-gray-200">
+        
+        <!-- Kinematics Section -->
+        <section id="kinematics" class="mb-16 pt-16 -mt-16">
+            <h2 class="text-3xl font-bold mb-2 text-gray-900">4. Robot Kinematics</h2>
+            <p class="text-lg text-gray-600 mb-8 max-w-4xl">Kinematics is the geometry of motion. This section explores how we can predict a robot's end-effector position from its joint angles (Forward Kinematics) and, more challengingly, how we can determine the required joint angles to reach a specific target (Inverse Kinematics).</p>
+            
+            <div class="content-card rounded-lg p-6">
+                <h3 class="text-xl font-semibold mb-4">Interactive 2-Link Arm Kinematics</h3>
+                <div class="grid lg:grid-cols-2 gap-8">
+                    <div>
+                        <div class="flex justify-center mb-4 rounded-lg bg-gray-100 p-1">
+                            <button id="btn-fk" class="control-button w-1/2 p-2 rounded-md font-medium">Forward Kinematics</button>
+                            <button id="btn-ik" class="control-button w-1/2 p-2 rounded-md font-medium">Inverse Kinematics</button>
+                        </div>
+                        <div id="kinematics-controls"></div>
+                        <div class="mt-4 p-4 bg-gray-50 rounded-lg text-sm">
+                            <p id="kinematics-info-text"></p>
+                            <div id="kinematics-output"></div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-100 rounded-lg aspect-square">
+                         <canvas id="kinematicsCanvas" class="w-full h-full"></canvas>
+                    </div>
+                </div>
+                <div class="mt-6">
+                    <h4 class="text-lg font-semibold mb-2">Degrees of Freedom (DOF) & Joints</h4>
+                    <p class="text-sm text-gray-700 mb-2">
+                        <strong>Degrees of Freedom (DOF)</strong> refers to the number of independent movements (translations and rotations) a robot can execute. In 3D space, a rigid body has 6 DOF (3 translational, 3 rotational). The DOF dictates a robot's dexterity and its ability to position and orient its end-effector. A minimum of 6 DOF is generally required for full control in a 3D environment.
+                    </p>
+                    <p class="text-sm text-gray-700 mb-2">
+                        Robot movements are facilitated by different <strong>types of joints</strong>:
+                        <ul class="list-disc list-inside ml-4 text-sm text-gray-600">
+                            <li><strong>Revolute Joint (R):</strong> Permits rotation around a fixed axis. Variable is an angle ($\theta$). Example: elbow joint.</li>
+                            <li><strong>Prismatic Joint (P):</strong> Allows linear translation along a fixed axis. Variable is a displacement ($d$). Example: hydraulic piston.</li>
+                        </ul>
+                    </p>
+                    <h5 class="font-semibold text-md mt-4 mb-2">Gruebler-Kutzbach Criterion (for DOF)</h5>
+                    <p class="text-sm text-gray-700">
+                        For Spatial Mechanisms: $DOF = 6(N - 1 - J) + \sum_{j=1}^{J} f_j$
+                    </p>
+                    <p class="text-sm text-gray-700">
+                        For Planar Mechanisms: $DOF = 3(N - 1 - J) + \sum_{j=1}^{J} f_j$
+                    </p>
+                    <p class="text-sm text-gray-700 mt-2">
+                        Where $N$ = number of links (including base), $J$ = number of joints, $f_j$ = DOF of the $j$-th joint.
+                    </p>
+
+                    <h4 class="text-lg font-semibold mt-6 mb-2">Forward Kinematics (FK)</h4>
+                    <p class="text-sm text-gray-700 mb-2">
+                        <strong>Forward Kinematics (FK)</strong> is the process of calculating the position and orientation (pose) of a robot's end-effector when the values of its joint parameters are known. This is often summarized as converting "Angles to Position." FK is deterministic: for every valid set of input joint parameters, there is a unique and predictable output pose.
+                    </p>
+                    <h5 class="font-semibold text-md mt-4 mb-2">Homogeneous Transformation Matrices (HTM)</h5>
+                    <p class="text-sm text-gray-700 mb-2">
+                        HTMs are 4x4 matrices that represent both rotation and translation within a single structure, simplifying kinematic computations by allowing chaining of multiple transformations through matrix multiplication.
+                    </p>
+                    <div class="math-formula">
+                        $T = \begin{bmatrix} R_{3\times3} & d_{3\times1} \\ 0_{1\times3} & 1 \end{bmatrix}$
+                    </div>
+                    <p class="text-sm text-gray-700">Where $R$ is a 3x3 rotation matrix and $d$ is a 3x1 translation vector.</p>
+
+                    <h5 class="font-semibold text-md mt-4 mb-2">Denavit-Hartenberg (DH) Convention</h5>
+                    <p class="text-sm text-gray-700 mb-2">
+                        The <strong>Denavit-Hartenberg (DH) Method</strong> is a standardized procedure to compute Forward Kinematics for serial-link robots. It involves assigning coordinate frames to links, extracting four DH parameters, and chaining DH transformation matrices.
+                    </p>
+                    <p class="text-sm text-gray-700 mb-2">
+                        The four <strong>DH Parameters</strong> for each joint/link pair are:
+                        <ul class="list-disc list-inside ml-4 text-sm text-gray-600">
+                            <li>$\theta_i$ (Joint angle): Rotation about the $z_{i-1}$ axis (variable for revolute joints, constant for prismatic).</li>
+                            <li>$d_i$ (Link offset): Translation along the $z_{i-1}$ axis (variable for prismatic joints, constant for revolute).</li>
+                            <li>$a_i$ (Link length): Distance from the $z_{i-1}$ axis to the $z_i$ axis, measured along the $x_i$ axis.</li>
+                            <li>$\alpha_i$ (Link twist): Angle between the $z_{i-1}$ axis and the $z_i$ axis, measured about the $x_i$ axis.</li>
+                        </ul>
+                    </p>
+                    <h5 class="font-semibold text-md mt-4 mb-2">DH Transformation Matrix</h5>
+                    <div class="math-formula">
+                        $T_{i-1}^i = \begin{bmatrix} \cos\theta_i & -\sin\theta_i\cos\alpha_i & \sin\theta_i\sin\alpha_i & a_i\cos\theta_i \\ \sin\theta_i & \cos\theta_i\cos\alpha_i & -\cos\theta_i\sin\alpha_i & a_i\sin\theta_i \\ 0 & \sin\alpha_i & \cos\alpha_i & d_i \\ 0 & 0 & 0 & 1 \end{bmatrix}$
+                    </div>
+                    <p class="text-sm text-gray-700">The final pose $T_n^0 = T_0^1 \cdot T_1^2 \cdot \ldots \cdot T_{n-1}^n$.</p>
+
+                    <h4 class="text-lg font-semibold mt-6 mb-2">Inverse Kinematics (IK)</h4>
+                    <p class="text-sm text-gray-700 mb-2">
+                        <strong>Inverse Kinematics (IK)</strong> is the process of determining the joint parameters required for a robot's end-effector to reach a desired position and orientation ("Position to Angles"). It is generally more complex than FK.
+                    </p>
+                    <h5 class="font-semibold text-md mt-4 mb-2">Challenges in Inverse Kinematics</h5>
+                    <ul class="list-disc list-inside ml-4 text-sm text-gray-600">
+                        <li><strong>Multiple Solutions:</strong> A single target pose can have several joint configurations.</li>
+                        <li><strong>No Solution:</strong> Target is outside the robot's reachable workspace.</li>
+                        <li><strong>Infinite Solutions (Redundancy):</strong> For robots with more DOF than task dimensions.</li>
+                        <li><strong>Nonlinear Equations:</strong> Requires complex mathematical solvers.</li>
+                    </ul>
+                    <h5 class="font-semibold text-md mt-4 mb-2">Inverse Kinematics Solution Methods</h5>
+                    <ul class="list-disc list-inside ml-4 space-y-1 text-sm text-gray-600">
+                        <li><strong>Geometric (Trigonometric) Method:</strong> Uses laws of sines/cosines, best for simple planar robots.</li>
+                        <li><strong>Algebraic Method:</strong> Symbolically inverts FK equations, suitable for low-DOF robots.</li>
+                        <li><strong>Numerical (Iterative) Methods:</strong> Use Jacobian inverse or optimization; handles complex geometries and redundancy but requires initial guess and may not always converge.</li>
+                        <li><strong>Learning-Based Methods:</strong> Employ ML (e.g., neural networks) to learn solutions, fast inference but can have accuracy/generalization issues.</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+        <hr class="mb-16 border-gray-200">
+
+        <!-- Navigation Section -->
+        <section id="navigation" class="mb-16 pt-16 -mt-16">
+            <h2 class="text-3xl font-bold mb-2 text-gray-900">5. Robot Navigation & SLAM</h2>
+             <p class="text-lg text-gray-600 mb-8 max-w-4xl">Navigation is about getting from point A to point B. This involves not just finding a path (Path Planning) but also figuring out where you are in the first place, especially in an unknown environment (SLAM - Simultaneous Localization and Mapping).</p>
+            
+            <div class="grid lg:grid-cols-2 gap-8">
+                <!-- Path Planning -->
+                <div class="content-card rounded-lg p-6">
+                     <h3 class="text-xl font-semibold mb-2">Path Planning: A* vs. RRT</h3>
+                     <p class="text-sm text-gray-600 mb-4">Compare how a search-based algorithm (A*) and a sampling-based algorithm (RRT) find a path from the green start to the red goal, avoiding gray obstacles.</p>
+                     <div class="grid grid-cols-2 gap-4 mb-4">
+                        <button id="run-astar" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded">Run A*</button>
+                        <button id="run-rrt" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded">Run RRT</button>
+                        <button id="pause-pathfinding" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded">Pause</button>
+                        <button id="reset-pathfinding" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded">Reset</button>
+                     </div>
+                     <div class="bg-gray-100 rounded-lg aspect-square">
+                        <canvas id="pathfindingCanvas" class="w-full h-full"></canvas>
+                     </div>
+                     <div id="pathfinding-info" class="mt-4 text-sm text-center font-medium"></div>
+                     <div class="mt-6">
+                        <h4 class="text-lg font-semibold mb-2">Other Path Planning Algorithms</h4>
+                        <p class="text-sm text-gray-700">
+                            Beyond A* and RRT, other important search-based algorithms include:
+                            <ul class="list-disc list-inside mt-2 text-sm text-gray-600">
+                                <li><strong>Breadth-First Search (BFS):</strong> Finds shortest path in unweighted graphs.</li>
+                                <li><strong>Dijkstra's Algorithm:</strong> Finds shortest path in weighted graphs.</li>
+                            </ul>
+                            The choice depends on environment characteristics (known/unknown, static/dynamic) and optimality requirements.
+                        </p>
+                        <h5 class="font-semibold text-md mt-4 mb-2">A* Heuristics</h5>
+                        <ul class="list-disc list-inside mt-2 text-sm text-gray-600">
+                            <li><strong>Manhattan Distance:</strong> $h = |x_{current} - x_{goal}| + |y_{current} - y_{goal}|$, suitable for grid-based robots restricted to 4-directional motion.</li>
+                            <li><strong>Euclidean Distance:</strong> $h = \sqrt{(x_{current} - x_{goal})^2 + (y_{current} - y_{goal})^2}$</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- SLAM -->
+                <div class="content-card rounded-lg p-6">
+                     <h3 class="text-xl font-semibold mb-2">The SLAM Paradox</h3>
+                     <p class="text-sm text-gray-600 mb-4">SLAM solves the "chicken-and-egg" problem: to build a map, you need to know where you are, but to know where you are, you need a map. It's a continuous cycle of prediction and correction.</p>
+                     <div id="slam-diagram" class="mt-8 p-6"></div>
+                     <div class="mt-6">
+                        <h4 class="text-lg font-semibold mb-2">SLAM Approaches</h4>
+                        <p class="text-sm text-gray-700">
+                            Various algorithms address the SLAM problem:
+                            <ul class="list-disc list-inside mt-2 text-sm text-gray-600">
+                                <li><strong>Extended Kalman Filter (EKF-SLAM):</strong> Maintains a single state estimate, good for small, linear problems.</li>
+                                <li><strong>Particle Filter (FastSLAM):</strong> Uses multiple hypotheses (particles) to handle non-linearities and multi-modal uncertainty, more scalable to larger maps.</li>
+                                <li><strong>Graph-Based SLAM):</strong> Builds a graph of poses and constraints, using optimization for consistent mapping, common in large-scale applications.</li>
+                            </ul>
+                        </p>
+                        <h5 class="font-semibold text-md mt-4 mb-2">SLAM State Estimation Formulas</h5>
+                        <p class="text-sm text-gray-700">
+                            Prediction (Motion Update): $x_t = x_{t-1} + \Delta x$
+                        </p>
+                        <p class="text-sm text-gray-700">
+                            Landmark position update: $x_{landmark} = x_{robot} + r \cdot \cos(\theta_{robot} + \phi)$
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <hr class="mb-16 border-gray-200">
+
+        <!-- Perception Section -->
+        <section id="perception" class="mb-16 pt-16 -mt-16">
+            <h2 class="text-3xl font-bold mb-2 text-gray-900">6. Robot Perception</h2>
+            <p class="text-lg text-gray-600 mb-8 max-w-4xl">Perception is how a robot understands its environment from raw sensor data. This process is hierarchical, moving from low-level geometric maps to high-level semantic understanding, often powered by AI and machine learning.</p>
+            <div id="perception-pipeline" class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center"></div>
+            <div class="mt-6">
+                <h4 class="text-lg font-semibold mb-2">Semantic Mapping & Knowledge Representation</h4>
+                <p class="text-sm text-gray-700">
+                    Beyond basic geometric maps, robots can build <strong>Semantic Maps</strong> by combining metric maps with meaningful labels (e.g., "kitchen", "table"). This often involves AI/ML techniques like scene segmentation and object classification. Knowledge representation structures (T-box for class hierarchies, A-box for individuals) help robots reason about their environment at a higher, more abstract level.
+                </p>
+            </div>
+        </section>
+        <hr class="mb-16 border-gray-200">
+
+        <!-- ROS Section -->
+        <section id="ros" class="mb-16 pt-16 -mt-16">
+            <h2 class="text-3xl font-bold mb-2 text-gray-900">7. Robot Operating System (ROS)</h2>
+            <p class="text-lg text-gray-600 mb-8 max-w-4xl">ROS is a flexible framework for writing robot software. It provides tools and libraries to help build robot applications, enabling modularity and distributed computing.</p>
+            
+            <div class="grid lg:grid-cols-2 gap-8">
+                <div class="content-card rounded-lg p-6">
+                    <h3 class="text-xl font-semibold mb-4">ROS Architecture & Concepts</h3>
+                    <ul class="list-disc list-inside space-y-2 text-gray-700 text-sm">
+                        <li><strong>Master:</strong> Coordinates communication between nodes, provides name registration.</li>
+                        <li><strong>Nodes:</strong> Individual executable processes that perform computation (e.g., sensor driver, motor controller).</li>
+                        <li><strong>Topics:</strong> Asynchronous, unidirectional communication using a publisher-subscriber model.</li>
+                        <li><strong>Messages:</strong> Data structures defined in <code>.msg</code> files, used for communication over topics/services.</li>
+                        <li><strong>Services:</strong> Synchronous request/response communication, defined in <code>.srv</code> files.</li>
+                        <li><strong>Parameter Server:</strong> Shared dictionary for configuration variables, accessible by any node at runtime.</li>
+                        <li><strong>ROS Bags:</strong> Files used to record and replay topic messages for debugging and analysis.</li>
+                        <li><strong>ROS Launch Files:</strong> XML files to start multiple ROS nodes and set parameters, simplifying deployment.</li>
+                    </ul>
+                </div>
+                <div class="content-card rounded-lg p-6">
+                    <h3 class="text-xl font-semibold mb-4">ROS Tools & Simulation</h3>
+                    <ul class="list-disc list-inside space-y-2 text-gray-700 text-sm">
+                        <li><strong>RViz:</strong> A powerful 3D visualization tool for sensor data and robot state, crucial for debugging.</li>
+                        <li><strong>Gazebo:</strong> A 3D robot simulator seamlessly integrated with ROS, supporting physics-based simulation for testing navigation, manipulation, and perception algorithms in a virtual environment.</li>
+                        <li><strong>Common Tools:</strong> <code>rqt_graph</code> (visualize communication), <code>rosnode</code>, <code>rostopic</code>, <code>rosbag</code>, <code>rosparam</code> for introspection and debugging.</li>
+                    </ul>
+                    <h4 class="text-lg font-semibold mt-6 mb-2">ROS1 vs ROS2</h4>
+                    <p class="text-sm text-gray-700">
+                        <strong>ROS1 (e.g., Noetic):</strong> Mature, widely adopted, uses custom middleware.<br>
+                        <strong>ROS2 (e.g., Foxy, Humble):</strong> Newer, improved security, real-time capabilities, uses DDS middleware, better for production and multi-robot systems.
+                    </p>
+                </div>
+            </div>
+        </section>
+        <hr class="mb-16 border-gray-200">
+
+        <!-- Learning & HRI Section -->
+        <section id="learning-hri" class="pt-16 -mt-16">
+            <h2 class="text-3xl font-bold mb-2 text-gray-900">8. Learning & Human-Robot Interaction (HRI)</h2>
+            <p class="text-lg text-gray-600 mb-8 max-w-4xl">Robots are increasingly designed to learn from experience and interact effectively with human users, crucial for adaptability and societal integration.</p>
+            
+            <div class="grid lg:grid-cols-2 gap-8">
+                <div class="content-card rounded-lg p-6">
+                    <h3 class="text-xl font-semibold mb-4">Reinforcement Learning (RL)</h3>
+                    <p class="text-sm text-gray-700 mb-4">
+                        <strong>Reinforcement Learning (RL)</strong> is a type of machine learning where an agent learns to make optimal decisions by performing actions within an environment to maximize a cumulative reward.
+                    </p>
+                    <ul class="list-disc list-inside space-y-2 text-gray-700 text-sm">
+                        <li><strong>Agent-Environment Loop:</strong> The core cycle where the agent performs an action, the environment responds with a new state and a reward signal, and the agent updates its policy (strategy) based on this feedback.</li>
+                        <li><strong>Q-learning:</strong> A prominent model-free RL algorithm that learns an action-value function (Q-function), which estimates the expected cumulative reward for taking a specific action in a given state.</li>
+                        <li><strong>Exploration-Exploitation Trade-off:</strong> A fundamental challenge in RL involving balancing the act of trying new, potentially better actions (exploration) against utilizing actions known to yield good rewards (exploitation).</li>
+                        <li><strong>Example:</strong> A classic example for policy learning in RL is the GridWorld problem, where an agent learns to navigate a grid to reach a goal while avoiding obstacles, based on rewards and penalties.</li>
+                    </ul>
+                </div>
+                <div class="content-card rounded-lg p-6">
+                    <h3 class="text-xl font-semibold mb-4">Human-Robot Interaction (HRI)</h3>
+                    <p class="text-sm text-gray-700 mb-4">
+                        <strong>Human-Robot Interaction (HRI)</strong> is a multidisciplinary field dedicated to studying the interactions between humans and robots. Its goal is to design robots and interfaces that are intuitive, effective, and safe for human collaboration.
+                    </p>
+                    <ul class="list-disc list-inside space-y-2 text-gray-700 text-sm">
+                        <li><strong>Control Interfaces:</strong> Focuses on natural and intuitive ways for humans to command robots, including gesture-based control (e.g., hand movements), speech-based control (e.g., voice commands), and haptic feedback.</li>
+                        <li><strong>HRI Design Principles:</strong> Guidelines for creating effective and intuitive interactions, often emphasizing predictability, legibility of robot intent, and appropriate social cues.</li>
+                        <li><strong>Ethics, Transparency, and Trust:</strong> Critical considerations for societal integration and successful collaboration:
+                            <ul class="list-circle list-inside ml-4 mt-1 text-xs text-gray-600">
+                                <li><strong>Ethics:</strong> Addresses moral principles in robot design and deployment, including issues of robot autonomy, responsibility for actions, and ensuring human safety.</li>
+                                <li><strong>Transparency:</strong> Refers to the robot's ability to make its internal state, actions, and intentions understandable to humans, fostering clarity and predictability.</li>
+                                <li><strong>Trust:</strong> Signifies the human's ability to rely on robots to perform tasks safely, reliably, and consistently, which is built through transparent behavior and adherence to ethical guidelines.</li>
+                            </ul>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+    </main>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+
+    const appData = {
+        characteristics: [
+            { name: "Perception", icon: "👁️", description: "Ability to sense and interpret the environment using sensors like cameras or LIDAR." },
+            { name: "Computation", icon: "🧠", description: "Processing sensory data and making decisions, often using microcontrollers or AI." },
+            { name: "Actuation", icon: "💪", description: "Ability to perform physical actions in the environment using motors or grippers." },
+            { name: "Autonomy", icon: "🤖", description: "Operating independently without direct human control, fully or partially." },
+            { name: "Embodiment", icon: "🔩", description: "Having a physical body that exists and interacts within the real world." }
+        ],
+        robotTypes: [
+            { name: "Industrial Robots", description: "Fixed robotic arms for welding, painting, assembly (e.g., ABB, KUKA).", icon: "🏭" },
+            { name: "Service Robots", description: "Perform tasks for humans in homes, hotels, warehouses (e.g., Boston Dynamics Spot, delivery bots).", icon: "📦" },
+            { name: "Medical Robots", description: "Assist in surgery, rehabilitation, diagnostics (e.g., da Vinci Surgical System).", icon: "🏥" },
+            { name: "Humanoid Robots", description: "Resemble human shape/behavior for social or research roles (e.g., Honda ASIMO, BostonDynamics ATLAS).", icon: "🚶" },
+            { name: "Exploration Robots", description: "Operate in harsh, inaccessible environments, including Mars rovers and deep-sea exploration robots.", icon: "🔭" },
+            { name: "Defense Robots", description: "Used in military, security, and defense applications (e.g., MAARS, UAVs).", icon: "🛡️" }
+        ],
+        sensors: [
+            { category: "Proximity", name: "Infrared (IR)", pros: "Cost-effective, compact.", cons: "Affected by ambient light and surface color.", range: "10-80 cm" },
+            { category: "Proximity", name: "Ultrasonic", pros: "Good in various lighting.", cons: "Soft/angled surfaces can absorb sound.", range: "2cm-4m" },
+            { category: "Proximity", name: "LIDAR", pros: "High precision, long range.", cons: "Sensitive to weather, expensive.", range: ">100m" },
+            { category: "Vision", name: "RGB Camera", pros: "Rich color/texture data.", cons: "Sensitive to lighting, occlusions.", range: "Varies" },
+            { category: "Vision", name: "RGB-D Camera", pros: "Provides 3D structure.", cons: "Limited range, can have IR interference.", range: "Varies" },
+            { category: "Internal", name: "Wheel Encoders", pros: "Good for odometry.", cons: "Prone to error from wheel slip.", range: "N/A" },
+            { category: "Internal", name: "IMU", pros: "Tracks orientation/motion.", cons: "Accumulates drift over time.", range: "N/A" },
+        ],
+        actuators: [
+            // These are now described in detail directly in HTML, so this appData is less critical for the main description
+            { name: "DC Motor", description: "Continuous rotation, speed control.", control: "Voltage/PWM" },
+            { name: "Servo Motor", description: "Precise angular positioning.", control: "PWM Signal" },
+            { name: "Stepper Motor", description: "Precise step-by-step positioning.", control: "Step Pulses" },
+        ],
+        controlLoops: {
+            open: {
+                title: 'Open-Loop: "Fire and Forget"',
+                diagram: `<div class="p-4 border rounded-lg text-center"><span class="font-bold">Input</span> → <span class="p-2 bg-blue-100 rounded">Controller</span> → <span class="p-2 bg-green-100 rounded">Process</span> → <span class="font-bold">Output</span></div>`,
+                description: "Action is based only on the input command. It's simple and fast, but cannot correct errors or adapt to disturbances. Think of a simple toaster: you set the time, and it runs for that duration regardless of how toasted the bread actually is.",
+                pros: ["Simple", "Low cost", "Fast"],
+                cons: ["Inaccurate", "No error correction"]
+            },
+            closed: {
+                title: 'Closed-Loop: "Sense and Respond"',
+                diagram: `<div class="p-4 border rounded-lg"><div class="text-center"><span class="font-bold">Input</span> → <span class="p-2 bg-blue-100 rounded">Controller</span> → <span class="p-2 bg-green-100 rounded">Process</span> → <span class="font-bold">Output</span></div><div class="text-center mt-2">↑<span class="p-2 bg-yellow-100 rounded mx-4">Sensor (Feedback)</span>←</div></div>`,
+                description: "Continuously monitors the output via sensors and compares it to the desired input, correcting any error. This makes it accurate and adaptive. Think of a car's cruise control: it constantly measures speed and adjusts the engine to maintain it.",
+                pros: ["Accurate", "Adaptive", "Stable"],
+                cons: ["Complex", "Higher cost"]
+            }
+        },
+        kinematics: {
+            fk: {
+                info: "<strong>Forward Kinematics:</strong> Use the sliders to change the joint angles (θ₁ and θ₂) and observe the calculated position of the end-effector (x, y).",
+                controls: `
+                    <div class="space-y-3">
+                        <div>
+                            <label for="theta1-slider" class="flex justify-between text-sm font-medium text-gray-700"><span>Theta 1 (θ₁): <span id="theta1-value">0</span>°</span></label>
+                            <input id="theta1-slider" type="range" min="-180" max="180" step="1" value="45" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                        </div>
+                        <div>
+                            <label for="theta2-slider" class="flex justify-between text-sm font-medium text-gray-700"><span>Theta 2 (θ₂): <span id="theta2-value">0</span>°</span></label>
+                            <input id="theta2-slider" type="range" min="-180" max="180" step="1" value="60" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                        </div>
+                    </div>`
+            },
+            ik: {
+                info: "<strong>Inverse Kinematics:</strong> Click anywhere on the canvas to set a target position. The system will calculate the required joint angles to reach that point. Notice how there can be two solutions (elbow up/down).",
+                controls: `<p class="text-center text-gray-600 p-8 bg-gray-100 rounded-lg">Click on the canvas to set a target.</p>`
+            }
+        },
+        slam: [
+            { name: "Predict", description: "Estimate new pose from motion (odometry). Uncertainty increases." },
+            { name: "Measure", description: "Get new data from sensors (LIDAR, camera)." },
+            { name: "Associate", description: "Match new sensor data to existing map landmarks." },
+            { name: "Correct", description: "Update pose and map based on measurements. Uncertainty decreases." }
+        ],
+        perception: [
+            { name: "1. Sensor Data", description: "Raw measurements (pixels, point clouds).", color: "bg-blue-100" },
+            { name: "2. Environment Representation", description: "Data organized into a map (e.g., Occupancy Grid).", color: "bg-green-100" },
+            { name: "3. Semantic Understanding", description: "Map is enriched with meaning using AI/ML (e.g., 'This is a chair').", color: "bg-purple-100" },
+        ]
+    };
+    
+    function populateContent() {
+        const characteristicsContainer = document.getElementById('robot-characteristics');
+        appData.characteristics.forEach(c => {
+            characteristicsContainer.innerHTML += `
+                <div class="content-card rounded-lg p-6">
+                    <h3 class="text-xl font-semibold mb-2 flex items-center gap-3"><span class="text-2xl">${c.icon}</span> ${c.name}</h3>
+                    <p class="text-gray-600">${c.description}</p>
+                </div>
+            `;
+        });
+
+        const robotTypesContainer = document.getElementById('robot-types-cards');
+        appData.robotTypes.forEach(type => {
+            robotTypesContainer.innerHTML += `
+                <div class="content-card rounded-lg p-4">
+                    <h4 class="font-semibold flex items-center gap-2"><span class="text-xl">${type.icon}</span> ${type.name}</h4>
+                    <p class="text-sm text-gray-600 mt-2">${type.description}</p>
+                </div>
+            `;
+        });
+
+        const sensorFiltersContainer = document.getElementById('sensor-filters');
+        const sensorCardsContainer = document.getElementById('sensor-cards');
+        const sensorCategories = ["All", ...new Set(appData.sensors.map(s => s.category))];
+        sensorCategories.forEach(cat => {
+            sensorFiltersContainer.innerHTML += `
+                <button class="sensor-filter-btn px-3 py-1 text-sm font-medium rounded-full ${cat === 'All' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700'}">${cat}</button>
+            `;
+        });
+        
+        appData.sensors.forEach(s => {
+            sensorCardsContainer.innerHTML += `
+                <div class="content-card sensor-card rounded-lg p-4" data-category="${s.category}">
+                    <h4 class="font-semibold">${s.name}</h4>
+                    <p class="text-sm text-gray-500 mb-2">${s.category}</p>
+                    <p class="text-xs text-green-600"><strong>Pro:</strong> ${s.pros}</p>
+                    <p class="text-xs text-red-600"><strong>Con:</strong> ${s.cons}</p>
+                    <p class="text-xs text-gray-800 mt-2"><strong>Range:</strong> ${s.range}</p>
+                </div>
+            `;
+        });
+
+        document.querySelectorAll('.sensor-filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.sensor-filter-btn').forEach(b => b.classList.remove('bg-blue-500', 'text-white'));
+                btn.classList.add('bg-blue-500', 'text-white');
+                const category = btn.textContent;
+                document.querySelectorAll('.sensor-card').forEach(card => {
+                    if (category === 'All' || card.dataset.category === category) {
+                        card.style.display = 'block';
+                    } else {
+                        card.style.display = 'none';
+                    }
+                });
+            });
+        });
+
+        // Actuator cards are now defined directly in HTML for richer content
+        // The appData.actuators is no longer used to populate the main descriptions in the HTML.
+        // It remains in appData for potential future use or if a summary list is needed elsewhere.
+        
+        const slamContainer = document.getElementById('slam-diagram');
+        let slamHTML = '<div class="relative w-64 h-64 mx-auto">';
+        appData.slam.forEach((step, i) => {
+            const angle = (i / appData.slam.length) * 2 * Math.PI - Math.PI / 2;
+            const x = 50 + 40 * Math.cos(angle);
+            const y = 50 + 40 * Math.sin(angle);
+            slamHTML += `
+                <div class="absolute w-24 text-center" style="left: ${x}%; top: ${y}%; transform: translate(-50%, -50%);">
+                    <div class="p-2 bg-white border rounded-lg shadow">
+                        <h5 class="font-bold text-sm">${i+1}. ${step.name}</h5>
+                        <p class="text-xs text-gray-500">${step.description}</p>
+                    </div>
+                </div>`;
+        });
+        // Removed animation on the emoji
+        slamHTML += `<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-5xl">🔄</div></div>`;
+        slamContainer.innerHTML = slamHTML;
+
+        const perceptionContainer = document.getElementById('perception-pipeline');
+        appData.perception.forEach((step, i) => {
+            perceptionContainer.innerHTML += `
+                <div class="relative">
+                    <div class="content-card rounded-lg p-6 ${step.color}">
+                        <h4 class="text-lg font-semibold">${step.name}</h4>
+                        <p class="text-gray-700">${step.description}</p>
+                    </div>
+                    ${i < appData.perception.length - 1 ? '<div class="hidden md:block absolute top-1/2 right-0 -translate-y-1/2 translate-x-1/2 text-4xl text-gray-400">→</div><div class="md:hidden text-4xl text-gray-400 my-2">↓</div>' : ''}
+                </div>
+            `;
+        });
+    }
+
+    function setupNav() {
+        const navLinks = document.querySelectorAll('.nav-link');
+        const sections = document.querySelectorAll('section');
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    navLinks.forEach(link => {
+                        link.classList.toggle('active', link.getAttribute('href').substring(1) === entry.target.id);
+                    });
+                }
+            });
+        }, { rootMargin: '-50% 0px -50% 0px' });
+
+        sections.forEach(section => observer.observe(section));
+
+        const mobileNav = document.getElementById('mobile-nav');
+        mobileNav.addEventListener('change', () => {
+            window.location.hash = mobileNav.value;
+        });
+    }
+    
+    function setupControlLoopToggle() {
+        const btnOpen = document.getElementById('btn-open-loop');
+        const btnClosed = document.getElementById('btn-closed-loop');
+        const contentDiv = document.getElementById('control-loop-content');
+
+        function renderContent(type) {
+            const data = appData.controlLoops[type];
+            let listHTML = '<ul class="mt-4 space-y-2 text-sm">';
+            data.pros.forEach(pro => listHTML += `<li class="flex items-start"><span class="text-green-500 mr-2">✔</span> ${pro}</li>`);
+            data.cons.forEach(con => listHTML += `<li class="flex items-start"><span class="text-red-500 mr-2">✖</span> ${con}</li>`);
+            listHTML += '</ul>';
+
+            contentDiv.innerHTML = `
+                <h4 class="font-semibold text-lg">${data.title}</h4>
+                <div class="my-3">${data.diagram}</div>
+                <p class="text-gray-600 text-sm">${data.description}</p>
+                ${listHTML}
+            `;
+        }
+
+        btnOpen.addEventListener('click', () => {
+            btnOpen.classList.add('active');
+            btnClosed.classList.remove('active');
+            renderContent('open');
+        });
+        btnClosed.addEventListener('click', () => {
+            btnClosed.classList.add('active');
+            btnOpen.classList.remove('active');
+            renderContent('closed');
+        });
+
+        btnClosed.click();
+    }
+    
+    function setupPidController() {
+        const ctx = document.getElementById('pidChart').getContext('2d');
+        const sliders = {
+            kp: document.getElementById('kp-slider'),
+            ki: document.getElementById('ki-slider'),
+            kd: document.getElementById('kd-slider'),
+        };
+        const values = {
+            kp: document.getElementById('kp-value'),
+            ki: document.getElementById('ki-value'),
+            kd: document.getElementById('kd-value'),
+        };
+
+        let pidChart;
+        const setpoint = 1;
+        const timeSteps = 100;
+
+        function simulateSystem(kp, ki, kd) {
+            let processVariable = 0;
+            let integral = 0;
+            let lastError = 0;
+            const history = [];
+
+            for (let t = 0; t < timeSteps; t++) {
+                const error = setpoint - processVariable;
+                integral += error;
+                const derivative = error - lastError;
+                
+                const output = kp * error + ki * integral + kd * derivative;
+                
+                processVariable += output * 0.1; 
+                lastError = error;
+                history.push(processVariable);
+            }
+            return history;
+        }
+
+        function updateChart() {
+            const kp = parseFloat(sliders.kp.value);
+            const ki = parseFloat(sliders.ki.value) / 50; 
+            const kd = parseFloat(sliders.kd.value) * 10;
+
+            values.kp.textContent = kp.toFixed(2);
+            values.ki.textContent = (ki*50).toFixed(2);
+            values.kd.textContent = (kd/10).toFixed(2);
+            
+            pidChart.data.datasets[0].data = simulateSystem(kp, ki, kd);
+            pidChart.update('none');
+        }
+
+        const initialData = simulateSystem(
+            parseFloat(sliders.kp.value), 
+            parseFloat(sliders.ki.value) / 50, 
+            parseFloat(sliders.kd.value) * 10
+        );
+
+        pidChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: Array.from({ length: timeSteps }, (_, i) => i),
+                datasets: [{
+                    label: 'System Response',
+                    data: initialData,
+                    borderColor: '#2563eb',
+                    backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                    fill: false,
+                    tension: 0.1,
+                    pointRadius: 0
+                }, {
+                    label: 'Setpoint',
+                    data: Array(timeSteps).fill(setpoint),
+                    borderColor: '#f56565',
+                    borderDash: [5, 5],
+                    fill: false,
+                    pointRadius: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        suggestedMax: setpoint * 1.5
+                    },
+                    x: {
+                        title: { display: true, text: 'Time' }
+                    }
+                },
+                animation: { duration: 0 }
+            }
+        });
+        
+        for (const key in sliders) {
+            sliders[key].addEventListener('input', updateChart);
+        }
+        updateChart();
+    }
+    
+    function setupKinematics() {
+        const canvas = document.getElementById('kinematicsCanvas');
+        const ctx = canvas.getContext('2d');
+        const btnFk = document.getElementById('btn-fk');
+        const btnIk = document.getElementById('btn-ik');
+        const controlsContainer = document.getElementById('kinematics-controls');
+        const infoText = document.getElementById('kinematics-info-text');
+        const outputDiv = document.getElementById('kinematics-output');
+        
+        const l1 = 100, l2 = 80;
+        let mode = 'fk';
+        let theta1 = 45 * Math.PI / 180;
+        let theta2 = 60 * Math.PI / 180;
+        let targetX = 0, targetY = 0;
+
+        function resizeCanvas() {
+            canvas.width = canvas.clientWidth;
+            canvas.height = canvas.clientHeight;
+            draw();
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        function setMode(newMode) {
+            mode = newMode;
+            if (mode === 'fk') {
+                btnFk.classList.add('active');
+                btnIk.classList.remove('active');
+                infoText.innerHTML = appData.kinematics.fk.info;
+                controlsContainer.innerHTML = appData.kinematics.fk.controls;
+                setupFkListeners();
+                updateFkFromSliders();
+            } else {
+                btnIk.classList.add('active');
+                btnFk.classList.remove('active');
+                infoText.innerHTML = appData.kinematics.ik.info;
+                controlsContainer.innerHTML = appData.kinematics.ik.controls;
+                outputDiv.innerHTML = "<strong>Result:</strong> No target selected.";
+            }
+            draw();
+        }
+        
+        function drawArm(t1, t2, color = '#2563eb') {
+            const width = canvas.width;
+            const height = canvas.height;
+            const originX = width / 2;
+            const originY = height / 2;
+            
+            const x1 = originX + l1 * Math.cos(t1);
+            const y1 = originY + l1 * Math.sin(t1);
+            const x2 = x1 + l2 * Math.cos(t1 + t2);
+            const y2 = y1 + l2 * Math.sin(t1 + t2);
+
+            ctx.beginPath();
+            ctx.moveTo(originX, originY);
+            ctx.lineTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.lineWidth = 5;
+            ctx.strokeStyle = color;
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.arc(originX, originY, 5, 0, 2 * Math.PI);
+            ctx.arc(x1, y1, 5, 0, 2 * Math.PI);
+            ctx.arc(x2, y2, 5, 0, 2 * Math.PI);
+            ctx.fillStyle = '#1e40af';
+            ctx.fill();
+            
+            return {x: x2, y: y2};
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const originX = canvas.width / 2;
+            const originY = canvas.height / 2;
+            
+            // Draw workspace
+            ctx.beginPath();
+            ctx.arc(originX, originY, l1 + l2, 0, 2 * Math.PI);
+            ctx.strokeStyle = '#e2e8f0';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(originX, originY, Math.abs(l1 - l2), 0, 2 * Math.PI);
+            ctx.stroke();
+
+            if (mode === 'fk') {
+                const {x, y} = drawArm(theta1, theta2);
+                outputDiv.innerHTML = `<strong>End-Effector:</strong> (x: ${((x - originX)).toFixed(1)}, y: ${((y - originY)).toFixed(1)})`;
+            } else {
+                // Draw target
+                if (targetX !== 0 || targetY !== 0) {
+                     ctx.beginPath();
+                     ctx.arc(targetX, targetY, 7, 0, 2 * Math.PI);
+                     ctx.fillStyle = 'rgba(245, 101, 101, 0.7)';
+                     ctx.fill();
+                     ctx.strokeStyle = '#f56565';
+                     ctx.stroke();
+                }
+               
+                const dx = targetX - originX;
+                const dy = targetY - originY;
+                const distSq = dx*dx + dy*dy;
+                const dist = Math.sqrt(distSq);
+
+                if (dist > l1 + l2 || dist < Math.abs(l1 - l2)) {
+                    outputDiv.innerHTML = `<strong class="text-red-500">Result:</strong> Target is unreachable.`;
+                    drawArm(theta1, theta2, '#a0aec0');
+                } else {
+                    const D = (distSq - l1*l1 - l2*l2) / (2 * l1 * l2);
+                    let t2_elbow_down = Math.acos(D);
+                    let t2_elbow_up = -t2_elbow_down;
+
+                    let t1_elbow_down = Math.atan2(dy, dx) - Math.atan2(l2 * Math.sin(t2_elbow_down), l1 + l2 * Math.cos(t2_elbow_down));
+                    let t1_elbow_up = Math.atan2(dy, dx) - Math.atan2(l2 * Math.sin(t2_elbow_up), l1 + l2 * Math.cos(t2_elbow_up));
+                    
+                    drawArm(t1_elbow_up, t2_elbow_up, 'rgba(37, 99, 235, 0.5)'); // Elbow up
+                    drawArm(t1_elbow_down, t2_elbow_down); // Elbow down
+
+                    outputDiv.innerHTML = `
+                        <strong>Result (Elbow Down):</strong> θ₁=${(t1_elbow_down * 180 / Math.PI).toFixed(1)}°, θ₂=${(t2_elbow_down * 180 / Math.PI).toFixed(1)}° <br>
+                        <strong>Result (Elbow Up):</strong> θ₁=${(t1_elbow_up * 180 / Math.PI).toFixed(1)}°, θ₂=${(t2_elbow_up * 180 / Math.PI).toFixed(1)}°
+                    `;
+                }
+            }
+        }
+
+        function setupFkListeners() {
+            const theta1Slider = document.getElementById('theta1-slider');
+            const theta2Slider = document.getElementById('theta2-slider');
+            const theta1Value = document.getElementById('theta1-value');
+            const theta2Value = document.getElementById('theta2-value');
+
+            theta1Slider.addEventListener('input', () => updateFkFromSliders());
+            theta2Slider.addEventListener('input', () => updateFkFromSliders());
+        }
+        
+        function updateFkFromSliders() {
+            const theta1Slider = document.getElementById('theta1-slider');
+            const theta2Slider = document.getElementById('theta2-slider');
+            const theta1Value = document.getElementById('theta1-value');
+            const theta2Value = document.getElementById('theta2-value');
+
+            theta1 = parseFloat(theta1Slider.value) * Math.PI / 180;
+            theta2 = parseFloat(theta2Slider.value) * Math.PI / 180;
+            theta1Value.textContent = theta1Slider.value;
+            theta2Value.textContent = theta2Slider.value;
+            draw();
+        }
+
+        canvas.addEventListener('click', (e) => {
+            if (mode === 'ik') {
+                const rect = canvas.getBoundingClientRect();
+                targetX = e.clientX - rect.left;
+                targetY = e.clientY - rect.top;
+                draw();
+            }
+        });
+
+        btnFk.addEventListener('click', () => setMode('fk'));
+        btnIk.addEventListener('click', () => setMode('ik'));
+
+        setMode('fk');
+        setTimeout(resizeCanvas, 100);
+    }
+
+    function setupPathfinding() {
+        const canvas = document.getElementById('pathfindingCanvas');
+        const ctx = canvas.getContext('2d');
+        const infoDiv = document.getElementById('pathfinding-info');
+        const btnAstar = document.getElementById('run-astar');
+        const btnRrt = document.getElementById('run-rrt');
+        const btnPause = document.getElementById('pause-pathfinding');
+        const btnReset = document.getElementById('reset-pathfinding');
+
+
+        const grid_size = 50;
+        let cell_size;
+        let grid = [];
+        const start = {x: 5, y: 25};
+        const goal = {x: 45, y: 25};
+        let animationFrameId;
+        let isPaused = false;
+        let currentAlgorithm = null;
+        let astarState = {}; // To store A* specific state for pause/resume
+        let rrtState = {};   // To store RRT specific state for pause/resume
+
+
+        function resizeCanvas() {
+            canvas.width = canvas.clientWidth;
+            canvas.height = canvas.clientHeight;
+            cell_size = canvas.width / grid_size;
+            initGrid();
+            drawGrid();
+        }
+        window.addEventListener('resize', resizeCanvas);
+        
+        function initGrid() {
+            grid = Array(grid_size).fill(null).map(() => Array(grid_size).fill(0));
+            // Add some obstacles
+            for(let i=10; i<40; i++) {
+                grid[i][15] = 1; // wall 1
+                grid[i][35] = 1; // wall 2
+            }
+             grid[25][15] = 0; // hole in wall 1
+            drawGrid(); // Draw initial grid after reset
+            infoDiv.textContent = 'Select an algorithm to visualize.';
+            btnAstar.disabled = false;
+            btnRrt.disabled = false;
+            btnPause.disabled = true;
+            btnPause.textContent = 'Pause';
+            currentAlgorithm = null;
+            astarState = {};
+            rrtState = {};
+            cancelAnimationFrame(animationFrameId);
+        }
+        
+        function drawGrid(path = [], visited = new Set(), rrtNodes = []) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            for(let y=0; y<grid_size; y++) {
+                for(let x=0; x<grid_size; x++) {
+                    ctx.beginPath();
+                    ctx.rect(x * cell_size, y * cell_size, cell_size, cell_size);
+                    if(grid[y][x] === 1) ctx.fillStyle = '#4a5568';
+                    else if(start.x === x && start.y === y) ctx.fillStyle = '#48bb78';
+                    else if(goal.x === x && goal.y === y) ctx.fillStyle = '#f56565';
+                    else if(path.some(p => p.x === x && p.y === y)) ctx.fillStyle = '#4299e1';
+                    else if (rrtNodes.some(n => n.x === x && n.y === y)) ctx.fillStyle = '#63b3ed';
+                    else if (visited.has(`${x},${y}`)) ctx.fillStyle = '#a0aec0';
+                    else ctx.fillStyle = '#f7fafc';
+                    ctx.fill();
+                    ctx.strokeStyle = '#e2e8f0';
+                    ctx.stroke();
+                }
+            }
+             rrtNodes.forEach(node => {
+                if (node.parent) {
+                    ctx.beginPath();
+                    ctx.moveTo((node.parent.x + 0.5) * cell_size, (node.parent.y + 0.5) * cell_size);
+                    ctx.lineTo((node.x + 0.5) * cell_size, (node.y + 0.5) * cell_size);
+                    ctx.strokeStyle = '#3182ce';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                }
+            });
+        }
+        
+        function runAStar() {
+            if (currentAlgorithm && currentAlgorithm !== 'astar') {
+                initGrid(); // Reset if switching algorithms
+            }
+            currentAlgorithm = 'astar';
+            btnAstar.disabled = true;
+            btnRrt.disabled = true;
+            btnPause.disabled = false;
+            btnPause.textContent = 'Pause';
+            infoDiv.textContent = 'Running A*...';
+
+            if (!astarState.openSet) { // Initialize state if not resuming
+                astarState = {
+                    openSet: [{...start, g: 0, h: heuristic(start, goal), f: heuristic(start, goal)}],
+                    closedSet: new Set(),
+                    cameFrom: {},
+                    path: []
+                };
+            }
+            
+            function step() {
+                if (isPaused) {
+                    return;
+                }
+                if(astarState.openSet.length > 0) {
+                    astarState.openSet.sort((a,b) => a.f - b.f);
+                    const current = astarState.openSet.shift();
+
+                    if(current.x === goal.x && current.y === goal.y) {
+                        astarState.path = reconstructPath(astarState.cameFrom, current);
+                        drawGrid(astarState.path, astarState.closedSet);
+                        infoDiv.textContent = `A* finished. Path length: ${astarState.path.length}. Visited nodes: ${astarState.closedSet.size}.`;
+                        btnAstar.disabled = false;
+                        btnRrt.disabled = false;
+                        btnPause.disabled = true;
+                        return;
+                    }
+
+                    astarState.closedSet.add(`${current.x},${current.y}`);
+                    
+                    getNeighbors(current).forEach(neighbor => {
+                        if(astarState.closedSet.has(`${neighbor.x},${neighbor.y}`)) return;
+
+                        const tentative_g = current.g + 1;
+                        let existingNeighbor = astarState.openSet.find(n => n.x === neighbor.x && n.y === neighbor.y);
+                        
+                        if(!existingNeighbor) {
+                             neighbor.g = tentative_g;
+                             neighbor.h = heuristic(neighbor, goal);
+                             neighbor.f = neighbor.g + neighbor.h;
+                             astarState.cameFrom[`${neighbor.x},${neighbor.y}`] = current;
+                             astarState.openSet.push(neighbor);
+                        } else if (tentative_g < existingNeighbor.g) {
+                             existingNeighbor.g = tentative_g;
+                             existingNeighbor.f = existingNeighbor.g + existingNeighbor.h;
+                             astarState.cameFrom[`${neighbor.x},${neighbor.y}`] = current;
+                        }
+                    });
+                    
+                    drawGrid([], astarState.closedSet);
+                    animationFrameId = requestAnimationFrame(step);
+                } else {
+                     infoDiv.textContent = `A* finished. No path found.`;
+                     btnAstar.disabled = false;
+                     btnRrt.disabled = false;
+                     btnPause.disabled = true;
+                }
+            }
+            step();
+        }
+        
+        function runRRT() {
+            if (currentAlgorithm && currentAlgorithm !== 'rrt') {
+                initGrid(); // Reset if switching algorithms
+            }
+            currentAlgorithm = 'rrt';
+            btnAstar.disabled = true;
+            btnRrt.disabled = true;
+            btnPause.disabled = false;
+            btnPause.textContent = 'Pause';
+            infoDiv.textContent = 'Running RRT...';
+            
+            if (!rrtState.nodes) { // Initialize state if not resuming
+                rrtState = {
+                    nodes: [{...start, parent: null}],
+                    max_iter: 1500,
+                    step_size: 3,
+                    iter: 0
+                };
+            }
+            
+            function step() {
+                if (isPaused) {
+                    return;
+                }
+                if (rrtState.iter < rrtState.max_iter) {
+                    rrtState.iter++;
+                    const rand_node = {x: Math.floor(Math.random() * grid_size), y: Math.floor(Math.random() * grid_size)};
+                    let nearest_node = rrtState.nodes[0];
+                    let min_dist = Infinity;
+                    rrtState.nodes.forEach(node => {
+                        const d = dist(node, rand_node);
+                        if (d < min_dist) {
+                            min_dist = d;
+                            nearest_node = node;
+                        }
+                    });
+
+                    const angle = Math.atan2(rand_node.y - nearest_node.y, rand_node.x - nearest_node.x);
+                    const new_node = {
+                        x: Math.round(nearest_node.x + rrtState.step_size * Math.cos(angle)),
+                        y: Math.round(nearest_node.y + rrtState.step_size * Math.sin(angle)),
+                        parent: nearest_node
+                    };
+                    
+                    if (isValid(new_node) && isCollisionFree(nearest_node, new_node)) {
+                        rrtState.nodes.push(new_node);
+                         drawGrid([], new Set(), rrtState.nodes);
+                        
+                        if(dist(new_node, goal) < rrtState.step_size && isCollisionFree(new_node, goal)) {
+                             let finalNode = {...goal, parent: new_node};
+                             rrtState.nodes.push(finalNode);
+                             const path = reconstructPathRRT(finalNode);
+                             drawGrid(path, new Set(), rrtState.nodes);
+                             infoDiv.textContent = `RRT finished. Path found in ${rrtState.iter} iterations.`;
+                             btnAstar.disabled = false;
+                             btnRrt.disabled = false;
+                             btnPause.disabled = true;
+                             return;
+                        }
+                    }
+                     animationFrameId = requestAnimationFrame(step);
+                } else {
+                    infoDiv.textContent = `RRT finished. No path found after ${rrtState.max_iter} iterations.`;
+                    btnAstar.disabled = false;
+                    btnRrt.disabled = false;
+                    btnPause.disabled = true;
+                }
+            }
+            step();
+        }
+
+        function pausePathfinding() {
+            isPaused = !isPaused;
+            if (isPaused) {
+                cancelAnimationFrame(animationFrameId);
+                btnPause.textContent = 'Resume';
+                infoDiv.textContent = `Paused (${currentAlgorithm}).`;
+            } else {
+                btnPause.textContent = 'Pause';
+                infoDiv.textContent = `Resuming (${currentAlgorithm})...`;
+                if (currentAlgorithm === 'astar') {
+                    runAStar();
+                } else if (currentAlgorithm === 'rrt') {
+                    runRRT();
+                }
+            }
+        }
+
+        function resetPathfinding() {
+            cancelAnimationFrame(animationFrameId);
+            isPaused = false;
+            initGrid();
+        }
+        
+        function getNeighbors(node) {
+            const neighbors = [];
+            const dirs = [[0,1], [1,0], [0,-1], [-1,0]];
+            dirs.forEach(([dx, dy]) => {
+                const x = node.x + dx;
+                const y = node.y + dy;
+                if(x >= 0 && x < grid_size && y >= 0 && y < grid_size && grid[y][x] === 0) {
+                    neighbors.push({x, y});
+                }
+            });
+            return neighbors;
+        }
+
+        function heuristic(a,b) { return Math.abs(a.x - b.x) + Math.abs(a.y - b.y); }
+        function dist(a, b) { return Math.sqrt(Math.pow(a.x - b.x, 2) + Math.pow(a.y - b.y, 2)); }
+        function isValid(node) { return node.x >=0 && node.x < grid_size && node.y >= 0 && node.y < grid_size; }
+        function isCollisionFree(startNode, endNode) {
+            const d = dist(startNode, endNode);
+            for (let i = 0; i <= d; i++) {
+                const x = Math.round(startNode.x + i * (endNode.x - startNode.x) / d);
+                const y = Math.round(startNode.y + i * (endNode.y - startNode.y) / d);
+                if (!isValid({x,y}) || grid[y][x] === 1) return false;
+            }
+            return true;
+        }
+        
+        function reconstructPath(cameFrom, current) {
+            const path = [current];
+            while (cameFrom[`${current.x},${current.y}`]) {
+                current = cameFrom[`${current.x},${current.y}`];
+                path.unshift(current);
+            }
+            return path;
+        }
+
+        function reconstructPathRRT(node) {
+             const path = [];
+             while(node) {
+                 path.unshift({x: node.x, y: node.y});
+                 node = node.parent;
+             }
+             return path;
+        }
+        
+        btnAstar.addEventListener('click', runAStar);
+        btnRrt.addEventListener('click', runRRT);
+        btnPause.addEventListener('click', pausePathfinding);
+        btnReset.addEventListener('click', resetPathfinding);
+        
+        setTimeout(resizeCanvas, 100);
+    }
+    
+    // Initial calls
+    populateContent();
+    setupNav();
+    setupControlLoopToggle();
+    setupPidController();
+    setupKinematics();
+    setupPathfinding();
+
+    // Explicitly typeset MathJax after all content is loaded and structured
+    if (window.MathJax) {
+        MathJax.typesetPromise();
+    }
+});
+</script>
+</body>
+</html>
